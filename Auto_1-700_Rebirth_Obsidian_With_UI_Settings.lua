@@ -1138,7 +1138,7 @@ end
 
 BasicBox:AddToggle("Basic", {
     Text = "auto transform",
-    Default = true,
+    Default = false,
 
     Callback = function(Value)
 
@@ -3709,4 +3709,258 @@ Obsidian:Notify({
     Description = "UI Settings loaded!",
     Time = 3
 })
+local Tab3 = Window:AddTab("Premium ✨", "Select")
+--====================================================
+--// LOCK CHOOSE
+--====================================================
 
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LockedOnChanged =
+    ReplicatedStorage
+        :WaitForChild("Packages")
+        :WaitForChild("_Index")
+        :WaitForChild("sleitnick_knit@1.4.7")
+        :WaitForChild("knit")
+        :WaitForChild("Services")
+        :WaitForChild("SkillManager")
+        :WaitForChild("RE")
+        :WaitForChild("LockedOnChanged")
+
+local LockTargetType = "Mobs"
+local LockMode = "Near"
+local LockRange = 100
+local LockEnabled = false
+local LockThread = nil
+
+--====================================================
+--// CHARACTER ROOT
+--====================================================
+
+local function GetRoot(Character)
+    if not Character then
+        return nil
+    end
+
+    return Character:FindFirstChild("HumanoidRootPart")
+        or Character.PrimaryPart
+end
+
+local function GetMyRoot()
+    return GetRoot(LocalPlayer.Character)
+end
+
+--====================================================
+--// GET MOB TARGETS
+--====================================================
+
+local function GetMobs()
+    local Result = {}
+
+    local WorldMobs = workspace:FindFirstChild("World Mobs")
+    local MobsFolder = WorldMobs
+        and WorldMobs:FindFirstChild("Mobs")
+
+    if not MobsFolder then
+        return Result
+    end
+
+    for _, Mob in ipairs(MobsFolder:GetChildren()) do
+        local Humanoid = Mob:FindFirstChildOfClass("Humanoid")
+        local Root = GetRoot(Mob)
+
+        if Root and (not Humanoid or Humanoid.Health > 0) then
+            table.insert(Result, Mob)
+        end
+    end
+
+    return Result
+end
+
+--====================================================
+--// GET PLAYER TARGETS
+--====================================================
+
+local function GetPlayers()
+    local Result = {}
+
+    for _, Player in ipairs(Players:GetPlayers()) do
+        if Player ~= LocalPlayer then
+            local Character = Player.Character
+            local Humanoid = Character
+                and Character:FindFirstChildOfClass("Humanoid")
+            local Root = GetRoot(Character)
+
+            if Root and (not Humanoid or Humanoid.Health > 0) then
+                table.insert(Result, Character)
+            end
+        end
+    end
+
+    return Result
+end
+
+--====================================================
+--// FIND TARGET
+--====================================================
+
+local function GetBestTarget()
+    local MyRoot = GetMyRoot()
+
+    if not MyRoot then
+        return nil
+    end
+
+    local Targets
+
+    if LockTargetType == "Mobs" then
+        Targets = GetMobs()
+    else
+        Targets = GetPlayers()
+    end
+
+    if #Targets == 0 then
+        return nil
+    end
+
+    local ValidTargets = {}
+
+    for _, Target in ipairs(Targets) do
+        local Root = GetRoot(Target)
+
+        if Root then
+            local Distance = (Root.Position - MyRoot.Position).Magnitude
+
+            if Distance <= LockRange then
+                table.insert(ValidTargets, {
+                    Object = Target,
+                    Distance = Distance
+                })
+            end
+        end
+    end
+
+    if #ValidTargets == 0 then
+        return nil
+    end
+
+    -- RANDOM
+    if LockMode == "Random" then
+        return ValidTargets[math.random(1, #ValidTargets)].Object
+    end
+
+    -- NEAR = gần nhất
+    if LockMode == "Near" then
+        table.sort(ValidTargets, function(A, B)
+            return A.Distance < B.Distance
+        end)
+
+        return ValidTargets[1].Object
+    end
+
+    -- DISTANT = xa nhất
+    if LockMode == "Distant" then
+        table.sort(ValidTargets, function(A, B)
+            return A.Distance > B.Distance
+        end)
+
+        return ValidTargets[1].Object
+    end
+
+    return nil
+end
+
+--====================================================
+--// LOCK LOOP
+--====================================================
+
+local function StartLock()
+    if LockThread then
+        return
+    end
+
+    LockThread = task.spawn(function()
+
+        while LockEnabled do
+
+            local Target = GetBestTarget()
+
+            if Target then
+                pcall(function()
+                    LockedOnChanged:FireServer(Target)
+                end)
+            end
+
+            task.wait(0.15)
+        end
+
+        LockThread = nil
+    end)
+end
+
+--====================================================
+--// UI
+--// Thay FarmBox bằng Groupbox của ông nếu muốn đặt chỗ khác
+--====================================================
+
+local LockBox = DungeonTab3:AddLeftGroupbox("Lock Choose")
+
+LockBox:AddDropdown("LockTargetType", {
+    Values = {
+        "Mobs",
+        "Player"
+    },
+
+    Default = "Mobs",
+    Multi = false,
+
+    Text = "Choose Target",
+
+    Callback = function(Value)
+        LockTargetType = Value
+    end
+})
+
+LockBox:AddDropdown("LockMode", {
+    Values = {
+        "Near",
+        "Distant",
+        "Random"
+    },
+
+    Default = "Near",
+    Multi = false,
+
+    Text = "Lock Mode",
+
+    Callback = function(Value)
+        LockMode = Value
+    end
+})
+
+LockBox:AddSlider("LockRange", {
+    Text = "Lockon Range",
+    Default = 100,
+    Min = 1,
+    Max = 1000,
+    Rounding = 0,
+
+    Callback = function(Value)
+        LockRange = Value
+    end
+})
+
+LockBox:AddToggle("LockOn", {
+    Text = "Lockon",
+    Default = false,
+
+    Callback = function(Value)
+        LockEnabled = Value
+
+        if Value then
+            StartLock()
+        end
+    end
+})
