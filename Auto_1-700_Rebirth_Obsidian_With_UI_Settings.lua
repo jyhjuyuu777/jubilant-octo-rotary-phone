@@ -3687,7 +3687,7 @@ AutoStartBox:AddToggle("AutoReplay", {
 --// UI SETTINGS / THEME / CONFIG
 --====================================================
 
-local SettingsTab = Window:AddTab("UI Settings", "settings")
+local SettingsTab2 = Window:AddTab("UI Settings", "settings")
 
 ThemeManager:SetLibrary(Obsidian)
 SaveManager:SetLibrary(Obsidian)
